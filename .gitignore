@@ -1,0 +1,9 @@
+node_modules
+.tsbuild
+release
+
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea

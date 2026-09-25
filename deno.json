@@ -1,0 +1,13 @@
+{
+  "tasks": {
+    "build:capture": "deno run --allow-read --allow-write --allow-run --allow-env --allow-net capture/build.ts",
+    "check:capture": "deno check capture/main.ts capture/build.ts"
+  },
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "deno.ns", "esnext"]
+  },
+  "imports": {
+    "esbuild": "npm:esbuild@0.24.2"
+  },
+  "nodeModulesDir": "none"
+}

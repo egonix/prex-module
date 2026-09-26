@@ -30,7 +30,7 @@ export interface ModuleApi {
   /** Greps the page's own same-origin scripts; the pattern's first capture group becomes each key. */
   discover(pattern: string | RegExp): Promise<ScriptMatch[]>;
 
-  /** Named entries kept in the page's localStorage across reloads. `save` is false if storage refused it. */
+  /** Named entries kept in the page's localStorage across reloads. `save` is false if storage refused it or the key holds data it does not recognise. */
   save(name: string, data: unknown, note?: string): boolean;
   load(name: string): Saved | undefined;
   list(): Record<string, Saved>;

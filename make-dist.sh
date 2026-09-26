@@ -81,8 +81,8 @@ for f in "games/$MODULE.js" "$MODULE-hud/$MODULE-hud.js"; do
 done
 # Minifiers drop comments, but that is a claim, not a check. TypeScript's own
 # parser tells a comment from `//` inside a string or a regex literal; anything
-# but a licence notice fails the release. Licence notices stay on purpose: a
-# bundled dependency's licence requires its notice to travel with every copy.
+# but a license notice fails the release. License notices stay on purpose: a
+# bundled dependency's license requires its notice to travel with every copy.
 node - "$PROJECT/node_modules/typescript" "$STAGE/games/$MODULE.js" "$HUD" <<'JS'
 const ts = require(process.argv[2]);
 const { readFileSync } = require("node:fs");
@@ -98,9 +98,9 @@ for (const file of process.argv.slice(3)) {
     ts.forEachChild(node, walk);
   })(sf);
   const all = [...seen.values()];
-  const licences = all.filter((c) => /^\/\*!|@license|@preserve/.test(c));
-  const other = all.filter((c) => !licences.includes(c));
-  console.log(`    ${file.split("/").slice(-2).join("/")}: ${other.length} comments, ${licences.length} licence notices kept`);
+  const licenses = all.filter((c) => /^\/\*!|@license|@preserve/.test(c));
+  const other = all.filter((c) => !licenses.includes(c));
+  console.log(`    ${file.split("/").slice(-2).join("/")}: ${other.length} comments, ${licenses.length} license notices kept`);
   for (const c of other.slice(0, 3)) console.error(`      unexpected: ${c.slice(0, 80)}`);
   bad += other.length;
 }

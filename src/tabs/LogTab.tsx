@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { MODULE } from "../../shared/module.ts";
 import { getApi, type CaptureLogEntry, type Saved } from "../../shared/api.ts";
-import { copyToClipboard } from "../clipboard";
+import { copyToClipboard } from "../clipboard.ts";
 
 const SHOWN = 200;
 
@@ -88,7 +88,7 @@ export function LogTab() {
     const api = getApi();
     if (!api) return;
     const name = `${r.badge} ${r.label}`.trim().slice(0, 60) + ` @${new Date(entry.ts).toLocaleTimeString()}`;
-    setStatus(api.save(name, entry) ? `Saved as "${name}".` : "Not saved: storage refused it (full, blocked, or not JSON-encodable).");
+    setStatus(api.save(name, entry) ? `Saved as "${name}".` : "Not saved: storage refused it (full, blocked, not JSON-encodable, or the key holds other data).");
     refreshSaved();
   }
 

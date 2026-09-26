@@ -5,8 +5,8 @@
 import { render } from "preact";
 import { MODULE } from "../shared/module.ts";
 import type { GameModule, PrexyAgent } from "../shared/prexy.ts";
-import { Window } from "./Window";
-import { STYLES } from "./styles";
+import { Window } from "./Window.tsx";
+import { STYLES } from "./styles.ts";
 
 const HOST_ID = `prex-${MODULE}-hud-root`;
 const UNMOUNT = `__prex_${MODULE}_hud_unmount`;

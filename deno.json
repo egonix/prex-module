@@ -4,7 +4,9 @@
     "check:capture": "deno check capture/main.ts capture/build.ts"
   },
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "deno.ns", "esnext"]
+    "lib": ["dom", "dom.iterable", "deno.ns", "esnext"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
   },
   "imports": {
     "esbuild": "npm:esbuild@0.24.2"

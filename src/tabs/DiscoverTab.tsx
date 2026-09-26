@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { MODULE } from "../../shared/module.ts";
 import { getApi, type ScriptMatch } from "../../shared/api.ts";
-import { copyToClipboard } from "../clipboard";
+import { copyToClipboard } from "../clipboard.ts";
 
 // Starting points for a target you know nothing about yet. The first capture
 // group of a pattern becomes each result's name.

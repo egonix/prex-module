@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { MODULE } from "../shared/module.ts";
 import type { PrexyAgent } from "../shared/prexy.ts";
-import { DiscoverTab } from "./tabs/DiscoverTab";
-import { LogTab } from "./tabs/LogTab";
+import { DiscoverTab } from "./tabs/DiscoverTab.tsx";
+import { LogTab } from "./tabs/LogTab.tsx";
 
 // A new tab is an entry here and a panel below.
 const TABS = [

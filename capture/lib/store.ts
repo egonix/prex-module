@@ -25,17 +25,20 @@ export interface Store {
 }
 
 export function createStore(key: string): Store {
-  // An unreadable or differently shaped value reads as empty, and the next
-  // save replaces it. If this shape ever changes, bump `version` and migrate
-  // the old one here instead of letting that happen to real data.
-  function read(): Lib {
+  // A missing key reads as empty. Anything else that is not this shape, the
+  // page's own value under the same name, a corrupt write, a newer version,
+  // reads as undefined, and save/remove leave it alone rather than replace it.
+  // If this shape ever changes, bump `version` and migrate the old one here.
+  function read(): Lib | undefined {
     try {
-      const parsed = JSON.parse(localStorage.getItem(key) ?? "null") as Partial<Lib> | null;
+      const raw = localStorage.getItem(key);
+      if (raw === null) return { version: 1, saved: {} };
+      const parsed = JSON.parse(raw) as Partial<Lib> | null;
       if (parsed?.version === 1 && parsed.saved && typeof parsed.saved === "object") return parsed as Lib;
     } catch {
-      // fall through to empty
+      // fall through: unreadable
     }
-    return { version: 1, saved: {} };
+    return undefined;
   }
 
   // false covers both a full or blocked storage and data JSON cannot encode
@@ -52,13 +55,15 @@ export function createStore(key: string): Store {
   return {
     save(name, data, note) {
       const lib = read();
+      if (!lib) return false;
       lib.saved[name] = { savedAt: Date.now(), data, ...(note ? { note } : {}) };
       return write(lib);
     },
-    load: (name) => read().saved[name],
-    list: () => read().saved,
+    load: (name) => read()?.saved[name],
+    list: () => read()?.saved ?? {},
     remove(name) {
       const lib = read();
+      if (!lib) return;
       delete lib.saved[name];
       write(lib);
     },

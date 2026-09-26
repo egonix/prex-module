@@ -89,4 +89,4 @@ API paths. Add a tab with an entry in `TABS` and a panel in [`src/Window.tsx`](s
 *Highlighting again:* `shared/prexy.ts` mirrors prexy's agent contract, and `capture/lib/capture.ts` and `discover.ts` are copies
 of prex's. **That's what lets this example build on its own.** When prex changes them, bring the change across.
 
-*mirror example-c790985 `9bf5620d334b4dfe6e3a0096ded856a43c6132becd7f34ba0d8f141f0cb7f967`*
+*mirror example-904068b `56224d50445a85e1a38bce2a2fda5479354db211e2e7014b7a92088048c90b57`*

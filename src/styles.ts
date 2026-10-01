@@ -25,7 +25,8 @@ export const STYLES = `
   background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(139, 92, 246, 0.3);
   flex: 0 0 auto; user-select: none; cursor: move;
 }
-.prex-title { font-weight: 700; color: #c9b8ff; letter-spacing: 0.04em; }
+.prex-title { font-weight: 700; color: #c9b8ff; letter-spacing: 0.04em; margin-right: 4px; }
+.prex-version { color: #71717a; font-size: 11px; white-space: nowrap; }
 .prex-dot { width: 7px; height: 7px; border-radius: 50%; }
 .prex-dot.on { background: #4ade80; }
 .prex-dot.off { background: #f87171; }

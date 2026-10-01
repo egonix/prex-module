@@ -60,6 +60,7 @@ From the page's console:
 ```js
 example.log                            // newest first; each entry has a stable .key
 example.discover('type:\\s*"(\\w+)"')  // grep the page's own scripts; group 1 is the name
+example.discover(/(\w+)/, [url, ...])  // grep exactly these, e.g. chunks not loaded yet
 example.readGlobal("state")            // a global, including top-level let/const
 example.save("foobar", example.log[0]) // kept in localStorage across reloads
 example.nativeFetch("/api/me")         // a request the hooks will not capture
@@ -70,6 +71,10 @@ example.nativeFetch("/api/me")         // a request the hooks will not capture
 Two tabs. **Log** shows the capture log, filterable, with copy and save, plus a **Saved** view of what was kept.
 **Discover** greps the page's own script files for a pattern, with presets for action types, event names and
 API paths. Add a tab with an entry in `TABS` and a panel in [`src/Window.tsx`](src/Window.tsx).
+
+The title bar shows two versions. The HUD's own is the commit it was built from, with `+` for uncommitted
+changes. The target's reads "unknown" until [`src/gameVersion.ts`](src/gameVersion.ts) 
+knows where the target states its version and bundle.
 
 ## Already handled, so don't undo it
 
@@ -83,10 +88,12 @@ API paths. Add a tab with an entry in `TABS` and a panel in [`src/Window.tsx`](s
 - **The schema's `game` is `MODULE`.** prex rejects a declaration whose game differs from the session's.
 - **Late sockets.** The WebSocket and EventSource hooks see only connections opened after the module loads. A
   socket the page opened earlier shows its outgoing messages but not its incoming ones until it reconnects.
+- **SSE over fetch and XHR.** A `text/event-stream` response is logged as `kind: "sse"` events while it
+  arrives. Read as one whole body it would never finish, and would hold the stream in memory.
 
 ## Compatibility with prex
 
 *Highlighting again:* `shared/prexy.ts` mirrors prexy's agent contract, and `capture/lib/capture.ts` and `discover.ts` are copies
 of prex's. **That's what lets this example build on its own.** When prex changes them, bring the change across.
 
-*mirror example-904068b `56224d50445a85e1a38bce2a2fda5479354db211e2e7014b7a92088048c90b57`*
+*mirror example-22c0d1b `815727ad7de12c4c4fde63f3591b7b2a717c0c7176f17b5c36d7caa20a9eebd9`*

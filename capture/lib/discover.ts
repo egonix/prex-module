@@ -11,6 +11,8 @@
 // whatever's actually deployed and gives enough surrounding context to
 // infer a specific action's payload shape on demand, only for whichever
 // ones a given goal actually turns out to need.
+import { nativeFetch } from "./capture.ts";
+
 export interface ScriptMatch {
   key: string;
   files: string[];
@@ -21,25 +23,32 @@ export interface ScriptMatch {
 // (e.g. every ACTION_TYPE literal). contextChars is how much surrounding
 // source to keep per occurrence; maxContextsPerKey caps it for patterns
 // that recur a lot.
-// Fetches only same-origin scripts already on the page
-// (via `filter`, since a page can load third-party scripts too that aren't
-// the target's own code and may not even be fetchable cross-origin without extra trouble).
+// Scans the scripts the page has loaded so far (loadedScriptUrls below), or
+// exactly `urls` when given, e.g. chunks a bundler's own chunk map names that
+// the page hasn't loaded yet. `filter` applies to either, since a page can load
+// third-party scripts too that aren't the target's own code and may not even
+// be fetchable cross-origin without extra trouble.
+//
+// Downloads go through nativeFetch, never the page's fetch: with hookFetch
+// installed unfiltered, every scan otherwise captured each bundle it read as
+// page traffic.
 export async function discoverInScripts(
   pattern: RegExp,
-  opts: { contextChars?: number; maxContextsPerKey?: number; filter?: (url: string) => boolean } = {},
+  opts: { contextChars?: number; maxContextsPerKey?: number; filter?: (url: string) => boolean; urls?: string[] } = {},
 ): Promise<ScriptMatch[]> {
   const contextChars = opts.contextChars ?? 150;
   const maxContextsPerKey = opts.maxContextsPerKey ?? 3;
   const filter = opts.filter ?? (() => true);
 
-  const scriptUrls = [...document.querySelectorAll("script[src]")].map((el) => (el as HTMLScriptElement).src).filter(filter);
+  const scriptUrls = [...new Set(opts.urls ?? loadedScriptUrls())].filter(filter);
+  const fetchScript = nativeFetch();
 
   const found = new Map<string, ScriptMatch>();
 
   await Promise.all(
     scriptUrls.map(async (url) => {
       try {
-        const res = await fetch(url);
+        const res = await fetchScript(url);
         const text = await res.text();
         const fileName = url.split("/").pop()?.split("?")[0] ?? url;
         const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g");
@@ -63,4 +72,21 @@ export async function discoverInScripts(
   );
 
   return [...found.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+// Every script the page has loaded so far, from two sources because neither
+// is complete alone. <script src> only names what the HTML (or a loader)
+// inserted, and a bundler's code-split chunks arrive through import(), which
+// leaves no <script> behind.
+// Chunks the page has not loaded yet appear in neither; pass `urls` for those.
+function loadedScriptUrls(): string[] {
+  const urls = new Set<string>();
+  for (const el of document.querySelectorAll<HTMLScriptElement>("script[src]")) urls.add(el.src);
+  for (const el of document.querySelectorAll<HTMLLinkElement>("link[rel=modulepreload][href], link[rel=preload][as=script][href]")) {
+    urls.add(el.href);
+  }
+  for (const entry of performance.getEntriesByType("resource")) {
+    if ((entry as PerformanceResourceTiming).initiatorType === "script" || /\.m?js(?:[?#]|$)/.test(entry.name)) urls.add(entry.name);
+  }
+  return [...urls];
 }

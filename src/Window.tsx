@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { MODULE } from "../shared/module.ts";
 import type { PrexyAgent } from "../shared/prexy.ts";
+import { HUD_BUILT_AT, HUD_VERSION } from "./buildInfo.ts";
+import { useGameVersion } from "./gameVersion.ts";
 import { DiscoverTab } from "./tabs/DiscoverTab.tsx";
 import { LogTab } from "./tabs/LogTab.tsx";
 
@@ -18,6 +20,7 @@ export function Window({ agent }: { agent: PrexyAgent }) {
   const [connected, setConnected] = useState(agent.connected);
   const [pos, setPos] = useState({ top: 70, left: 70 });
   const drag = useRef<{ x: number; y: number; top: number; left: number } | null>(null);
+  const game = useGameVersion();
 
   useEffect(() => {
     const id = setInterval(() => setConnected(agent.connected), 1000);
@@ -55,6 +58,13 @@ export function Window({ agent }: { agent: PrexyAgent }) {
       <div class="prex-window" style={{ top: `${pos.top}px`, left: `${pos.left}px`, display: visible ? "flex" : "none" }}>
         <div class="prex-header" onMouseDown={onHeaderMouseDown}>
           <span class="prex-title">{MODULE}</span>
+          <span class="prex-version" title={`HUD build ${HUD_VERSION}, built ${new Date(HUD_BUILT_AT).toLocaleString()}`}>
+            {HUD_VERSION}
+          </span>
+          <span class="prex-version" title={`Server: ${game.version ?? "unknown"}\nRunning bundle: ${game.bundle ?? "unknown"}`}>
+            game {game.version ?? "unknown"}
+            {game.bundle ? ` (${game.bundle})` : ""}
+          </span>
           <span class={`prex-dot ${connected ? "on" : "off"}`} title={connected ? "connected to prex" : "not connected to prex"} />
           <button type="button" class="prex-close" onClick={() => setVisible(false)}>
             ×

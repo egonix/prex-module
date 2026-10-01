@@ -81,8 +81,8 @@ const captureModule: GameModule = {
       // when `this` is anything but the window or undefined.
       nativeFetch: (input, init) => nativeFetch()(input, init),
       // async so a malformed pattern rejects instead of throwing synchronously.
-      discover: async (pattern) =>
-        discoverInScripts(typeof pattern === "string" ? new RegExp(pattern) : pattern, { filter: sameOrigin }),
+      discover: async (pattern, urls) =>
+        discoverInScripts(typeof pattern === "string" ? new RegExp(pattern) : pattern, { filter: sameOrigin, urls }),
       save: store.save,
       load: store.load,
       list: store.list,

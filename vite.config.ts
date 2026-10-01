@@ -1,4 +1,5 @@
 import preact from "@preact/preset-vite";
+import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type UserConfig } from "vite";
@@ -19,8 +20,26 @@ export default defineConfig((): UserConfig => {
     throw new Error(`no prex static directory at ${staticDir}; set PREX_STATIC to <prex checkout>/static`);
   }
 
+  // The title bar's HUD version: the commit, "+" when the build has
+  // uncommitted changes (package.json's version is never bumped). make-dist.sh
+  // builds from a git archive, which has no history to ask, so it passes its
+  // own in HUD_VERSION. A build outside a git checkout still works, as "dev".
+  const git = (args: string) => {
+    try {
+      return execSync(`git ${args}`, { cwd: fileURLToPath(new URL(".", import.meta.url)), stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    } catch {
+      return "";
+    }
+  };
+  const commit = git("rev-parse --short HEAD");
+  const hudVersion = process.env.HUD_VERSION || (commit ? `${commit}${git("status --porcelain") ? "+" : ""}` : "dev");
+
   return {
     plugins: [preact()],
+    define: {
+      __HUD_VERSION__: JSON.stringify(hudVersion),
+      __HUD_BUILT_AT__: JSON.stringify(new Date().toISOString()),
+    },
     build: {
       lib: {
         entry: fileURLToPath(new URL("./src/main.tsx", import.meta.url)),

@@ -27,8 +27,8 @@ export interface ModuleApi {
   /** The page's fetch as it was before any hook: for requests that should not be captured. */
   nativeFetch: typeof fetch;
 
-  /** Greps the page's own same-origin scripts; the pattern's first capture group becomes each key. */
-  discover(pattern: string | RegExp): Promise<ScriptMatch[]>;
+  /** Greps the page's own same-origin scripts, the loaded ones or exactly `urls`; the pattern's first capture group becomes each key. */
+  discover(pattern: string | RegExp, urls?: string[]): Promise<ScriptMatch[]>;
 
   /** Named entries kept in the page's localStorage across reloads. `save` is false if storage refused it or the key holds data it does not recognise. */
   save(name: string, data: unknown, note?: string): boolean;

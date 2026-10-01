@@ -137,7 +137,15 @@ export interface HttpCaptureEntry extends CaptureLogEntry {
 // "stash it on first install" property would stay unset forever on a tab
 // that was already hooked before a given reload, which is exactly the bug
 // this shape was chosen to avoid ... found the hard way on a real target :)
-export function hookFetch(push: (entry: HttpCaptureEntry) => void, opts: { filter?: (url: string, method: string) => boolean } = {}): void {
+//
+// A text/event-stream response is SSE read through fetch (fetch-event-source,
+// streaming LLM APIs) and gets its own path, see readEventStream below: the
+// plain path's clone().text() resolves only when the body ends, which a stream
+// never does, so it logged nothing and held the whole stream in memory.
+export function hookFetch(
+  push: (entry: HttpCaptureEntry | SseCaptureEntry) => void,
+  opts: { filter?: (url: string, method: string) => boolean } = {},
+): void {
   const currentFetch = window.fetch as typeof fetch & { __prexFetchHooked?: boolean; __prexFetchPush?: typeof push };
   if (currentFetch.__prexFetchHooked) {
     currentFetch.__prexFetchPush = push;
@@ -163,6 +171,11 @@ export function hookFetch(push: (entry: HttpCaptureEntry) => void, opts: { filte
       }
       promise
         .then((res) => {
+          if (isEventStream(res.headers.get("content-type"))) {
+            wrapped.__prexFetchPush?.({ kind: "http", method, url, status: res.status, reqBody, resBody: EVENT_STREAM_BODY, ts: 0 });
+            readEventStream(res.clone().body, url, (entry) => wrapped.__prexFetchPush?.(entry));
+            return;
+          }
           res
             .clone()
             .text()
@@ -352,7 +365,14 @@ export function hookWebSocketFull(push: (entry: WsCaptureEntry) => void, opts: {
 // the page looked almost silent.
 // Anything built on axios or jQuery is XHR by default, which is a large share of
 // the web, `fetch` being the modern API does not make it the common one.
-export function hookXHR(push: (entry: HttpCaptureEntry) => void, opts: { filter?: (url: string, method: string) => boolean } = {}): void {
+//
+// A text/event-stream response is parsed as it arrives, from `progress`, and
+// reported as SSE events; loadend alone would report nothing until the stream
+// closed. The growing responseText is the browser's own buffer, not ours.
+export function hookXHR(
+  push: (entry: HttpCaptureEntry | SseCaptureEntry) => void,
+  opts: { filter?: (url: string, method: string) => boolean } = {},
+): void {
   const Native = window.XMLHttpRequest as typeof XMLHttpRequest & {
     __prexXhrHooked?: boolean;
     __prexXhrPush?: typeof push;
@@ -392,10 +412,59 @@ export function hookXHR(push: (entry: HttpCaptureEntry) => void, opts: { filter?
             meta.reqBody = body;
           }
         }
+        // Set once the headers say text/event-stream; `seen` is how much of
+        // responseText the parser has already had.
+        let stream: { feed: (text: string) => void; events: () => number } | null = null;
+        let seen = 0;
+        const feedNew = () => {
+          const text = this.responseText;
+          stream?.feed(text.slice(seen));
+          seen = text.length;
+        };
+        this.addEventListener("readystatechange", () => {
+          try {
+            if (stream || this.readyState !== this.HEADERS_RECEIVED) return;
+            // responseText is unreadable for any other responseType.
+            if (this.responseType !== "" && this.responseType !== "text") return;
+            if (!isEventStream(this.getResponseHeader("content-type"))) return;
+            stream = sseFeeder(meta.url, (entry) => Native.__prexXhrPush?.(entry));
+            Native.__prexXhrPush?.({
+              kind: "http",
+              method: meta.method,
+              url: meta.url,
+              status: this.status,
+              reqBody: meta.reqBody,
+              resBody: EVENT_STREAM_BODY,
+              ts: 0,
+            });
+          } catch {
+            //NOP never let capture errors break the page
+          }
+        });
+        this.addEventListener("progress", () => {
+          try {
+            if (stream) feedNew();
+          } catch {
+            //NOP never let capture errors break the page
+          }
+        });
         // loadend fires for success, error and abort alike, so one listener
         // covers every terminal outcome without three separate handlers.
         this.addEventListener("loadend", () => {
           try {
+            if (stream) {
+              feedNew();
+              const aborted = this.status === 0;
+              Native.__prexXhrPush?.({
+                kind: "sse",
+                dir: "sys",
+                type: aborted ? "error" : "close",
+                url: meta.url,
+                payload: aborted ? { events: stream.events(), error: "network error or aborted" } : { events: stream.events() },
+                ts: 0,
+              });
+              return;
+            }
             let data: unknown;
             // responseText THROWS when responseType is "blob"/"arraybuffer"/
             // "document", reading it unguarded would break capture on any
@@ -449,7 +518,8 @@ export interface SseCaptureEntry extends CaptureLogEntry {
 
 // Server-Sent Events. The second server-push transport, and a target that uses
 // it instead of a WebSocket is 100% invisible without this, the same total
-// blind spot XHR was, not a partial one.
+// blind spot XHR was, not a partial one. SSE read through fetch or XHR instead
+// of EventSource is reported in this same shape by hookFetch/hookXHR.
 //
 // Like hookWebSocketFull this replaces the constructor, so it only sees streams
 // opened after it installs. Unlike a WebSocket there is no prototype-level send
@@ -516,6 +586,108 @@ export function hookEventSource(push: (entry: SseCaptureEntry) => void): void {
     __prexSsePush: push,
   });
   window.EventSource = WrappedES as unknown as typeof EventSource;
+}
+
+// resBody of the http entry for a streamed response: its events follow as
+// kind "sse" entries, then one "close" or "error".
+const EVENT_STREAM_BODY = "[text/event-stream]";
+
+function isEventStream(contentType: string | null): boolean {
+  return contentType?.split(";")[0].trim().toLowerCase() === "text/event-stream";
+}
+
+export interface SseEvent {
+  type: string;
+  data: string;
+}
+
+// The event-stream format as the HTML spec defines it for EventSource, fed text
+// in whatever pieces the network delivers: lines end in CRLF, LF or CR, a blank
+// line dispatches, `:` lines are comments, one space after the colon is dropped,
+// and an event with no data line is not dispatched. `id` and `retry` only steer
+// EventSource's reconnects, so they are skipped, as the EventSource hook skips
+// them. Keeps only the unfinished line and the current event, never the stream.
+export function createSseParser(onEvent: (ev: SseEvent) => void): (text: string) => void {
+  let pending = ""; // the line still being received
+  let afterCr = false; // the last piece ended in CR, so a leading LF finishes that line break
+  let type = "";
+  let data: string[] | null = null;
+
+  const line = (l: string) => {
+    if (l === "") {
+      if (data) onEvent({ type: type || "message", data: data.join("\n") });
+      type = "";
+      data = null;
+      return;
+    }
+    if (l[0] === ":") return;
+    const colon = l.indexOf(":");
+    const field = colon === -1 ? l : l.slice(0, colon);
+    let value = colon === -1 ? "" : l.slice(colon + 1);
+    if (value[0] === " ") value = value.slice(1);
+    if (field === "event") type = value;
+    else if (field === "data") (data ??= []).push(value);
+  };
+
+  return (text: string) => {
+    if (text === "") return;
+    if (afterCr && text[0] === "\n") text = text.slice(1);
+    afterCr = false;
+    const from = pending.length;
+    pending += text;
+    let start = 0;
+    for (let i = from; i < pending.length; i++) {
+      const c = pending[i];
+      if (c !== "\n" && c !== "\r") continue;
+      line(pending.slice(start, i));
+      if (c === "\r") {
+        if (i + 1 === pending.length) afterCr = true;
+        else if (pending[i + 1] === "\n") i++;
+      }
+      start = i + 1;
+    }
+    pending = pending.slice(start);
+  };
+}
+
+// A parser that pushes each event as a kind "sse" entry and counts them.
+function sseFeeder(url: string, push: (entry: SseCaptureEntry) => void): { feed: (text: string) => void; events: () => number } {
+  let events = 0;
+  const feed = createSseParser((ev) => {
+    events++;
+    let payload: unknown;
+    try {
+      payload = JSON.parse(ev.data);
+    } catch {
+      payload = ev.data;
+    }
+    push({ kind: "sse", dir: "in", type: ev.type, url, payload, ts: 0 });
+  });
+  return { feed, events: () => events };
+}
+
+// Reads hookFetch's clone of a text/event-stream response as it arrives.
+//
+// The clone is a tee of the page's body. It keeps the connection open until
+// both halves are done, so a page that stops reading with reader.cancel()
+// rather than an AbortController leaves it open, and events keep being
+// captured, until the server ends the stream. An abort ends both halves.
+async function readEventStream(body: ReadableStream<Uint8Array> | null, url: string, push: (entry: SseCaptureEntry) => void): Promise<void> {
+  if (!body) return;
+  const stream = sseFeeder(url, push);
+  const decoder = new TextDecoder();
+  try {
+    const reader = body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      stream.feed(decoder.decode(value, { stream: true }));
+    }
+    stream.feed(decoder.decode());
+    push({ kind: "sse", dir: "sys", type: "close", url, payload: { events: stream.events() }, ts: 0 });
+  } catch (err) {
+    push({ kind: "sse", dir: "sys", type: "error", url, payload: { events: stream.events(), error: String((err as Error)?.message ?? err) }, ts: 0 });
+  }
 }
 
 export interface BeaconCaptureEntry extends CaptureLogEntry {

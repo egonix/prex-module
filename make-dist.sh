@@ -40,6 +40,9 @@ echo "==> $MODULE @ $VERSION"
 STAGE="$WORK/stage"
 mkdir -p "$STAGE"
 export PREX_STATIC="$STAGE"
+# The HUD's title bar version. The archive has no .git for vite.config.ts to
+# ask, so without this every release would call itself "dev".
+export HUD_VERSION="$VERSION"
 
 echo "==> build capture module"
 ( cd "$SRC" && deno task build:capture >/dev/null )
